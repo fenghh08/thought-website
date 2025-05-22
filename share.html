@@ -1,0 +1,444 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Share Your Thoughts - English Practice Platform</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .post-form {
+            background: #f8f9fa;
+            padding: 25px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            border-left: 4px solid #4CAF50;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 5px;
+            font-weight: 600;
+            color: #333;
+        }
+
+        input[type="text"], textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="text"]:focus, textarea:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+
+        textarea {
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        .btn {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 25px;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+
+        .btn:hover {
+            background: #45a049;
+        }
+
+        .btn-small {
+            padding: 6px 12px;
+            font-size: 14px;
+            margin-left: 10px;
+        }
+
+        .btn-advice {
+            background: #2196F3;
+        }
+
+        .btn-advice:hover {
+            background: #1976D2;
+        }
+
+        .thoughts-container {
+            margin-top: 20px;
+        }
+
+        .thought-card {
+            background: white;
+            border: 2px solid #eee;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .thought-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
+        }
+
+        .thought-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .author {
+            font-weight: 600;
+            color: #4CAF50;
+            font-size: 16px;
+        }
+
+        .timestamp {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .thought-content {
+            line-height: 1.6;
+            margin-bottom: 15px;
+            font-size: 15px;
+        }
+
+        .replies-section {
+            margin-top: 20px;
+            padding-top: 15px;
+            border-top: 1px solid #eee;
+        }
+
+        .reply {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 10px;
+            border-left: 3px solid #ddd;
+        }
+
+        .reply.advice {
+            border-left-color: #2196F3;
+            background: #e3f2fd;
+        }
+
+        .reply-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+
+        .reply-author {
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .reply-author.advice-author {
+            color: #2196F3;
+        }
+
+        .reply-form {
+            margin-top: 15px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .reply-form.active {
+            display: block;
+        }
+
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .empty-state h3 {
+            margin-bottom: 10px;
+            color: #888;
+        }
+
+        @media (max-width: 600px) {
+            .container {
+                margin: 10px;
+                border-radius: 10px;
+            }
+            
+            .header {
+                padding: 20px;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+            
+            .content {
+                padding: 20px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌟 Share Your Thoughts</h1>
+            <p>Express yourself, connect with others, and improve your English together!</p>
+        </div>
+        
+        <div class="content">
+            <form class="post-form" id="thoughtForm">
+                <h3 style="margin-bottom: 20px; color: #333;">✍️ Share a thought</h3>
+
+                <div class="form-group">
+                    <label for="thoughtContent">Your Thought:</label>
+                    <textarea id="thoughtContent" placeholder="What's on your mind? Share anything - a story, question, observation, or just how you're feeling today..." required></textarea>
+                </div>
+                <button type="submit" class="btn">Share Thought 🚀</button>
+            </form>
+
+            <div class="thoughts-container" id="thoughtsContainer">
+                <div class="empty-state" id="emptyState">
+                    <h3>No thoughts shared yet</h3>
+                    <p>Be the first to share something interesting!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class ThoughtBoard {
+            constructor() {
+                this.thoughts = JSON.parse(localStorage.getItem('thoughts')) || [];
+                this.thoughtForm = document.getElementById('thoughtForm');
+                this.thoughtsContainer = document.getElementById('thoughtsContainer');
+                this.emptyState = document.getElementById('emptyState');
+                
+                this.init();
+            }
+
+            init() {
+                this.thoughtForm.addEventListener('submit', (e) => this.handleThoughtSubmit(e));
+                this.renderThoughts();
+            }
+
+            handleThoughtSubmit(e) {
+                e.preventDefault();
+                
+                const content = document.getElementById('thoughtContent').value.trim();
+                
+                if (!content) return;
+
+                const thought = {
+                    id: Date.now(),
+                    author: "Anonymous",
+                    content: content,
+                    timestamp: new Date().toLocaleString(),
+                    replies: []
+                };
+
+                this.thoughts.unshift(thought);
+                this.saveThoughts();
+                this.renderThoughts();
+                this.thoughtForm.reset();
+            }
+
+            addReply(thoughtId, author, content, isAdvice = false) {
+                const thought = this.thoughts.find(t => t.id === thoughtId);
+                if (!thought) return;
+
+                const reply = {
+                    id: Date.now(),
+                    author: author,
+                    content: content,
+                    timestamp: new Date().toLocaleString(),
+                    isAdvice: isAdvice
+                };
+
+                thought.replies.push(reply);
+                this.saveThoughts();
+                this.renderThoughts();
+            }
+
+            saveThoughts() {
+                localStorage.setItem('thoughts', JSON.stringify(this.thoughts));
+            }
+
+            renderThoughts() {
+                if (this.thoughts.length === 0) {
+                    this.emptyState.style.display = 'block';
+                    this.thoughtsContainer.innerHTML = '';
+                    this.thoughtsContainer.appendChild(this.emptyState);
+                    return;
+                }
+
+                this.emptyState.style.display = 'none';
+                
+                this.thoughtsContainer.innerHTML = this.thoughts.map(thought => `
+                    <div class="thought-card">
+                        <div class="thought-header">
+                            <span class="author">${this.escapeHtml(thought.author)}</span>
+                            <span class="timestamp">${thought.timestamp}</span>
+                        </div>
+                        <div class="thought-content">${this.escapeHtml(thought.content)}</div>
+                        
+                        <div class="actions">
+                            <button class="btn btn-small" onclick="thoughtBoard.toggleReplyForm(${thought.id})">
+                                💬 Reply
+                            </button>
+                            <button class="btn btn-small btn-advice" onclick="thoughtBoard.toggleAdviceForm(${thought.id})">
+                                📝 Give English Advice
+                            </button>
+                        </div>
+
+                        <div class="reply-form" id="replyForm-${thought.id}">
+                            <div class="form-group">
+                                <label>Your Reply:</label>
+                                <textarea id="replyContent-${thought.id}" placeholder="Write your reply..."></textarea>
+                            </div>
+                            <button class="btn btn-small" onclick="thoughtBoard.submitReply(${thought.id}, false)">
+                                Send Reply
+                            </button>
+                        </div>
+
+                        <div class="reply-form" id="adviceForm-${thought.id}">
+                            <div class="form-group">
+                                <label>English Advice:</label>
+                                <textarea id="adviceContent-${thought.id}" placeholder="Provide helpful English corrections, suggestions, or encouragement..."></textarea>
+                            </div>
+                            <button class="btn btn-small btn-advice" onclick="thoughtBoard.submitReply(${thought.id}, true)">
+                                Give Advice
+                            </button>
+                        </div>
+
+                        ${thought.replies.length > 0 ? `
+                            <div class="replies-section">
+                                <h4 style="margin-bottom: 15px; color: #666; font-size: 14px;">
+                                    💭 Replies (${thought.replies.length})
+                                </h4>
+                                ${thought.replies.map(reply => `
+                                    <div class="reply ${reply.isAdvice ? 'advice' : ''}">
+                                        <div class="reply-header">
+                                            <span class="reply-author ${reply.isAdvice ? 'advice-author' : ''}">
+                                                ${reply.isAdvice ? '👨‍🏫 ' : ''}${this.escapeHtml(reply.author)}
+                                            </span>
+                                            <span class="timestamp">${reply.timestamp}</span>
+                                        </div>
+                                        <div>${this.escapeHtml(reply.content)}</div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            }
+
+            toggleReplyForm(thoughtId) {
+                const replyForm = document.getElementById(`replyForm-${thoughtId}`);
+                const adviceForm = document.getElementById(`adviceForm-${thoughtId}`);
+                
+                adviceForm.classList.remove('active');
+                replyForm.classList.toggle('active');
+            }
+
+            toggleAdviceForm(thoughtId) {
+                const replyForm = document.getElementById(`replyForm-${thoughtId}`);
+                const adviceForm = document.getElementById(`adviceForm-${thoughtId}`);
+                
+                replyForm.classList.remove('active');
+                adviceForm.classList.toggle('active');
+            }
+
+            submitReply(thoughtId, isAdvice) {
+                const formType = isAdvice ? 'advice' : 'reply';
+                const content = document.getElementById(`${formType}Content-${thoughtId}`).value.trim();
+                
+                if (!content) {
+                    alert('Please write something before submitting.');
+                    return;
+                }
+
+                const author = isAdvice ? "English Teacher" : "Anonymous";
+                this.addReply(thoughtId, author, content, isAdvice);
+                
+                // Clear and hide the form
+                document.getElementById(`${formType}Content-${thoughtId}`).value = '';
+                document.getElementById(`${formType}Form-${thoughtId}`).classList.remove('active');
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+        }
+
+        // Initialize the thought board
+        const thoughtBoard = new ThoughtBoard();
+    </script>
+</body>
+</html>
