@@ -95,6 +95,8 @@
             cursor: pointer;
             font-size: 16px;
             transition: background-color 0.3s;
+            margin-right: 10px;
+            margin-bottom: 10px;
         }
 
         .btn:hover {
@@ -107,9 +109,8 @@
         }
 
         .btn-small {
-            padding: 6px 12px;
+            padding: 8px 15px;
             font-size: 14px;
-            margin-left: 10px;
         }
 
         .btn-advice {
@@ -139,12 +140,6 @@
             padding: 20px;
             margin-bottom: 20px;
             box-shadow: 0 2px 8px rgba(0,0,0,0.1);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .thought-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 15px rgba(0,0,0,0.15);
         }
 
         .thought-header {
@@ -171,6 +166,22 @@
             line-height: 1.6;
             margin-bottom: 15px;
             font-size: 15px;
+        }
+
+        .actions {
+            margin-bottom: 15px;
+        }
+
+        .reply-form {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            display: none;
+        }
+
+        .reply-form.active {
+            display: block;
         }
 
         .replies-section {
@@ -207,36 +218,13 @@
             color: #2196F3;
         }
 
-        .reply-form {
-            margin-top: 15px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 8px;
-            display: none;
-        }
-
-        .reply-form.active {
-            display: block;
-        }
-
-        .actions {
-            display: flex;
-            gap: 10px;
-            margin-top: 15px;
-        }
-
         .empty-state {
             text-align: center;
             padding: 40px;
             color: #666;
         }
 
-        .empty-state h3 {
-            margin-bottom: 10px;
-            color: #888;
-        }
-
-        .status-indicator {
+        .status {
             position: fixed;
             top: 20px;
             right: 20px;
@@ -248,41 +236,13 @@
             z-index: 1000;
         }
 
-        .status-indicator.local {
+        .status.local {
             background: #ff9800;
-        }
-
-        .status-indicator.error {
-            background: #f44336;
-        }
-
-        @media (max-width: 600px) {
-            .container {
-                margin: 10px;
-                border-radius: 10px;
-            }
-            
-            .header {
-                padding: 20px;
-            }
-            
-            .header h1 {
-                font-size: 2em;
-            }
-            
-            .content {
-                padding: 20px;
-            }
-
-            .status-indicator {
-                top: 10px;
-                right: 10px;
-            }
         }
     </style>
 </head>
 <body>
-    <div class="status-indicator" id="statusIndicator">⏳ Loading...</div>
+    <div class="status" id="status">📱 Local Mode</div>
     
     <div class="container">
         <div class="header">
@@ -293,513 +253,259 @@
         <div class="content">
             <form class="post-form" id="thoughtForm">
                 <h3 style="margin-bottom: 20px; color: #333;">✍️ Share a thought</h3>
-
                 <div class="form-group">
                     <label for="thoughtContent">Your Thought:</label>
                     <textarea id="thoughtContent" placeholder="What's on your mind? Share anything - a story, question, observation, or just how you're feeling today..." required></textarea>
                 </div>
-                <button type="submit" class="btn" id="submitBtn">Share Thought 🚀</button>
+                <button type="submit" class="btn">Share Thought 🚀</button>
             </form>
 
             <div class="thoughts-container" id="thoughtsContainer">
-                <div class="empty-state" id="emptyState">
-                    <h3>Loading thoughts...</h3>
-                    <p>Setting up your thought board...</p>
+                <div class="empty-state">
+                    <h3>No thoughts shared yet</h3>
+                    <p>Be the first to share something interesting!</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Try to load Firebase, but continue without it if it fails -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-
     <script>
-        class ThoughtBoard {
-            constructor() {
-                this.thoughts = [];
-                this.thoughtForm = document.getElementById('thoughtForm');
-                this.thoughtsContainer = document.getElementById('thoughtsContainer');
-                this.emptyState = document.getElementById('emptyState');
-                this.submitBtn = document.getElementById('submitBtn');
-                this.statusIndicator = document.getElementById('statusIndicator');
-                this.useFirebase = false;
-                this.db = null;
-                
-                this.init();
-            }
+        // Simple, reliable thought board - focus on working functionality
+        let thoughts = [];
+        let nextId = 1;
 
-            async init() {
-                // Try to initialize Firebase
-                await this.initializeFirebase();
-                
-                this.thoughtForm.addEventListener('submit', (e) => this.handleThoughtSubmit(e));
-                this.loadThoughts();
-                this.setupConnectionMonitoring();
-            }
-
-            async initializeFirebase() {
-                try {
-                    // Wait a bit for Firebase to load
-                    await new Promise(resolve => setTimeout(resolve, 1000));
-                    
-                    if (typeof firebase !== 'undefined') {
-                        const firebaseConfig = {
-                            apiKey: "AIzaSyC3z1wVUk8A75gNKM_-SvzdIRwYnFG8uzM",
-                            authDomain: "thought-website-7b7a3.firebaseapp.com",
-                            projectId: "thought-website-7b7a3",
-                            storageBucket: "thought-website-7b7a3.firebasestorage.app",
-                            messagingSenderId: "109248529056",
-                            appId: "1:109248529056:web:c8049e93cedcfc2388bfc5",
-                            measurementId: "G-QLMPB5VMGN"
-                        };
-
-                        firebase.initializeApp(firebaseConfig);
-                        this.db = firebase.firestore();
-                        this.useFirebase = true;
-                        this.statusIndicator.textContent = '🌐 Cloud Connected';
-                        this.statusIndicator.className = 'status-indicator';
-                        
-                        // Set up real-time listener
-                        this.setupRealtimeListener();
-                        console.log('Firebase connected successfully');
-                        return;
-                    }
-                } catch (error) {
-                    console.log('Firebase failed to initialize:', error);
-                }
-                
-                // Fallback to localStorage
-                this.useFirebase = false;
-                this.statusIndicator.textContent = '📱 Local Mode';
-                this.statusIndicator.className = 'status-indicator local';
-                console.log('Using local storage mode');
-            }
-
-            setupConnectionMonitoring() {
-                window.addEventListener('online', () => {
-                    if (this.useFirebase) {
-                        this.statusIndicator.textContent = '🌐 Cloud Connected';
-                        this.statusIndicator.className = 'status-indicator';
-                    }
-                });
-
-                window.addEventListener('offline', () => {
-                    this.statusIndicator.textContent = '📱 Offline';
-                    this.statusIndicator.className = 'status-indicator error';
-                });
-            }
-
-            setupRealtimeListener() {
-                if (!this.useFirebase) return;
-                
-                this.db.collection('thoughts')
-                    .orderBy('timestamp', 'desc')
-                    .onSnapshot((snapshot) => {
-                        console.log('Firebase snapshot received, documents:', snapshot.size);
-                        this.thoughts = [];
-                        snapshot.forEach((doc) => {
-                            const data = doc.data();
-                            this.thoughts.push({
-                                id: doc.id,
-                                ...data,
-                                // Ensure replies array exists
-                                replies: data.replies || []
-                            });
-                        });
-                        console.log('Updated thoughts from Firebase:', this.thoughts.length);
-                        this.renderThoughts();
-                    }, (error) => {
-                        console.error('Error listening to thoughts:', error);
-                        this.fallbackToLocal();
+        // Load thoughts from localStorage on page load
+        function loadThoughts() {
+            try {
+                const stored = localStorage.getItem('thoughts');
+                if (stored) {
+                    thoughts = JSON.parse(stored);
+                    // Ensure all thoughts have an ID and replies array
+                    thoughts.forEach(thought => {
+                        if (!thought.id) thought.id = nextId++;
+                        if (!thought.replies) thought.replies = [];
                     });
-            }
-
-            fallbackToLocal() {
-                this.useFirebase = false;
-                this.statusIndicator.textContent = '📱 Local Mode';
-                this.statusIndicator.className = 'status-indicator local';
-                this.loadThoughts();
-            }
-
-            async loadThoughts() {
-                if (this.useFirebase) {
-                    // Firebase handles this with real-time listener
-                    return;
                 }
-                
-                // Load from localStorage
-                try {
-                    const stored = localStorage.getItem('thoughts');
-                    this.thoughts = stored ? JSON.parse(stored) : [];
-                    this.renderThoughts();
-                } catch (error) {
-                    console.error('Error loading thoughts from localStorage:', error);
-                    this.thoughts = [];
-                    this.renderThoughts();
-                }
+            } catch (error) {
+                console.error('Error loading thoughts:', error);
+                thoughts = [];
             }
+            renderThoughts();
+        }
 
-            async handleThoughtSubmit(e) {
-                e.preventDefault();
-                
-                const content = document.getElementById('thoughtContent').value.trim();
-                
-                if (!content) return;
-
-                // Disable submit button
-                this.submitBtn.disabled = true;
-                this.submitBtn.textContent = 'Sharing...';
-
-                try {
-                    const thought = {
-                        id: Date.now().toString(),
-                        author: "Anonymous",
-                        content: content,
-                        timestamp: new Date(),
-                        replies: [] // Ensure replies array exists from the start
-                    };
-
-                    if (this.useFirebase) {
-                        const firebaseThought = {
-                            author: thought.author,
-                            content: thought.content,
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
-                            replies: []
-                        };
-                        const docRef = await this.db.collection('thoughts').add(firebaseThought);
-                        console.log('Firebase thought added with ID:', docRef.id);
-                    } else {
-                        this.thoughts.unshift(thought);
-                        this.saveThoughtsLocal();
-                        this.renderThoughts();
-                        console.log('Local thought added with ID:', thought.id);
-                    }
-                    
-                    this.thoughtForm.reset();
-                } catch (error) {
-                    console.error('Error adding thought:', error);
-                    this.showError('Failed to share thought. Please try again.');
-                } finally {
-                    this.submitBtn.disabled = false;
-                    this.submitBtn.textContent = 'Share Thought 🚀';
-                }
-            }
-
-            async addReply(thoughtId, author, content, isAdvice = false) {
-                console.log('Adding reply to thought:', thoughtId, 'Firebase mode:', this.useFirebase);
-                
-                const reply = {
-                    id: Date.now().toString(),
-                    author: author,
-                    content: content,
-                    timestamp: new Date(),
-                    isAdvice: isAdvice
-                };
-
-                if (this.useFirebase && this.db) {
-                    try {
-                        console.log('Attempting Firebase reply update...');
-                        
-                        // Use transaction to ensure data consistency
-                        await this.db.runTransaction(async (transaction) => {
-                            const thoughtRef = this.db.collection('thoughts').doc(thoughtId);
-                            const thoughtDoc = await transaction.get(thoughtRef);
-                            
-                            if (!thoughtDoc.exists) {
-                                throw new Error('Thought document does not exist');
-                            }
-                            
-                            const thoughtData = thoughtDoc.data();
-                            const currentReplies = thoughtData.replies || [];
-                            currentReplies.push(reply);
-                            
-                            transaction.update(thoughtRef, { replies: currentReplies });
-                        });
-                        
-                        console.log('Firebase reply added successfully');
-                        return true;
-                    } catch (error) {
-                        console.error('Firebase reply failed:', error);
-                        console.log('Falling back to local storage for reply');
-                        return this.addReplyLocal(thoughtId, reply);
-                    }
-                } else {
-                    console.log('Using local reply storage');
-                    return this.addReplyLocal(thoughtId, reply);
-                }
-            }
-
-            addReplyLocal(thoughtId, reply) {
-                try {
-                    console.log('Looking for thought with ID:', thoughtId, 'in', this.thoughts.length, 'thoughts');
-                    
-                    const thought = this.thoughts.find(t => t.id === thoughtId);
-                    if (thought) {
-                        if (!thought.replies) {
-                            thought.replies = [];
-                        }
-                        thought.replies.push(reply);
-                        this.saveThoughtsLocal();
-                        this.renderThoughts();
-                        console.log('Local reply added successfully. Thought now has', thought.replies.length, 'replies');
-                        return true;
-                    } else {
-                        console.error('Thought not found with ID:', thoughtId);
-                        console.log('Available thought IDs:', this.thoughts.map(t => t.id));
-                        this.showError('Could not find the thought to reply to.');
-                        return false;
-                    }
-                } catch (error) {
-                    console.error('Error adding local reply:', error);
-                    this.showError('Failed to add reply. Please try again.');
-                    return false;
-                }
-            }
-
-            async deleteThought(thoughtId) {
-                if (!confirm('Are you sure you want to delete this thought? This cannot be undone.')) {
-                    return;
-                }
-                
-                try {
-                    if (this.useFirebase) {
-                        await this.db.collection('thoughts').doc(thoughtId).delete();
-                    } else {
-                        this.thoughts = this.thoughts.filter(t => t.id !== thoughtId);
-                        this.saveThoughtsLocal();
-                        this.renderThoughts();
-                    }
-                } catch (error) {
-                    console.error('Error deleting thought:', error);
-                    this.showError('Failed to delete thought. Please try again.');
-                }
-            }
-
-            saveThoughtsLocal() {
-                try {
-                    localStorage.setItem('thoughts', JSON.stringify(this.thoughts));
-                } catch (error) {
-                    console.error('Error saving to localStorage:', error);
-                }
-            }
-
-            renderThoughts() {
-                if (this.thoughts.length === 0) {
-                    this.emptyState.style.display = 'block';
-                    this.emptyState.innerHTML = `
-                        <h3>No thoughts shared yet</h3>
-                        <p>Be the first to share something interesting!</p>
-                    `;
-                    this.thoughtsContainer.innerHTML = '';
-                    this.thoughtsContainer.appendChild(this.emptyState);
-                    return;
-                }
-
-                this.emptyState.style.display = 'none';
-                
-                this.thoughtsContainer.innerHTML = this.thoughts.map(thought => `
-                    <div class="thought-card">
-                        <div class="thought-header">
-                            <span class="author">${this.escapeHtml(thought.author)}</span>
-                            <span class="timestamp">${this.formatTimestamp(thought.timestamp)}</span>
-                        </div>
-                        <div class="thought-content">${this.escapeHtml(thought.content)}</div>
-                        
-                        <div class="actions">
-                            <button class="btn btn-small" onclick="thoughtBoard.toggleReplyForm('${thought.id}')">
-                                💬 Reply
-                            </button>
-                            <button class="btn btn-small btn-advice" onclick="thoughtBoard.toggleAdviceForm('${thought.id}')">
-                                📝 Give English Advice
-                            </button>
-                            <button class="btn btn-small btn-delete" onclick="thoughtBoard.deleteThought('${thought.id}')">
-                                🗑️ Delete
-                            </button>
-                        </div>
-
-                        <div class="reply-form" id="replyForm-${thought.id}">
-                            <div class="form-group">
-                                <label>Your Reply:</label>
-                                <textarea id="replyContent-${thought.id}" placeholder="Write your reply..."></textarea>
-                            </div>
-                            <button class="btn btn-small" onclick="thoughtBoard.submitReply('${thought.id}', false)">
-                                Send Reply
-                            </button>
-                        </div>
-
-                        <div class="reply-form" id="adviceForm-${thought.id}">
-                            <div class="form-group">
-                                <label>English Advice:</label>
-                                <textarea id="adviceContent-${thought.id}" placeholder="Provide helpful English corrections, suggestions, or encouragement..."></textarea>
-                            </div>
-                            <button class="btn btn-small btn-advice" onclick="thoughtBoard.submitReply('${thought.id}', true)">
-                                Give Advice
-                            </button>
-                        </div>
-
-                        ${thought.replies && thought.replies.length > 0 ? `
-                            <div class="replies-section">
-                                <h4 style="margin-bottom: 15px; color: #666; font-size: 14px;">
-                                    💭 Replies (${thought.replies.length})
-                                </h4>
-                                ${thought.replies.map(reply => `
-                                    <div class="reply ${reply.isAdvice ? 'advice' : ''}">
-                                        <div class="reply-header">
-                                            <span class="reply-author ${reply.isAdvice ? 'advice-author' : ''}">
-                                                ${reply.isAdvice ? '👨‍🏫 ' : ''}${this.escapeHtml(reply.author)}
-                                            </span>
-                                            <span class="timestamp">${this.formatTimestamp(reply.timestamp)}</span>
-                                        </div>
-                                        <div>${this.escapeHtml(reply.content)}</div>
-                                    </div>
-                                `).join('')}
-                            </div>
-                        ` : ''}
-                    </div>
-                `).join('');
-            }
-
-            toggleReplyForm(thoughtId) {
-                const replyForm = document.getElementById(`replyForm-${thoughtId}`);
-                const adviceForm = document.getElementById(`adviceForm-${thoughtId}`);
-                
-                if (adviceForm) adviceForm.classList.remove('active');
-                if (replyForm) replyForm.classList.toggle('active');
-            }
-
-            toggleAdviceForm(thoughtId) {
-                const replyForm = document.getElementById(`replyForm-${thoughtId}`);
-                const adviceForm = document.getElementById(`adviceForm-${thoughtId}`);
-                
-                if (replyForm) replyForm.classList.remove('active');
-                if (adviceForm) adviceForm.classList.toggle('active');
-            }
-
-            async submitReply(thoughtId, isAdvice) {
-                const formType = isAdvice ? 'advice' : 'reply';
-                const contentElement = document.getElementById(`${formType}Content-${thoughtId}`);
-                
-                if (!contentElement) {
-                    console.error('Could not find form element:', `${formType}Content-${thoughtId}`);
-                    this.showError('Form not found. Please refresh the page.');
-                    return;
-                }
-                
-                const content = contentElement.value.trim();
-                
-                if (!content) {
-                    alert('Please write something before submitting.');
-                    return;
-                }
-
-                const author = isAdvice ? "English Teacher" : "Anonymous";
-                
-                console.log('Submitting reply:', { thoughtId, author, content, isAdvice });
-                
-                // Show loading state
-                const submitButton = contentElement.parentNode.querySelector('.btn');
-                const originalText = submitButton.textContent;
-                submitButton.disabled = true;
-                submitButton.textContent = 'Sending...';
-                
-                try {
-                    const success = await this.addReply(thoughtId, author, content, isAdvice);
-                    
-                    if (success) {
-                        // Clear and hide the form
-                        contentElement.value = '';
-                        const form = document.getElementById(`${formType}Form-${thoughtId}`);
-                        if (form) form.classList.remove('active');
-                        console.log('Reply submitted successfully');
-                    } else {
-                        this.showError('Failed to submit reply. Please try again.');
-                    }
-                } catch (error) {
-                    console.error('Error submitting reply:', error);
-                    this.showError('Failed to submit reply. Please try again.');
-                } finally {
-                    // Restore button state
-                    submitButton.disabled = false;
-                    submitButton.textContent = originalText;
-                }
-            }
-
-            formatTimestamp(timestamp) {
-                if (!timestamp) return 'Just now';
-                
-                try {
-                    if (timestamp.toDate) {
-                        return timestamp.toDate().toLocaleString();
-                    }
-                    if (timestamp instanceof Date) {
-                        return timestamp.toLocaleString();
-                    }
-                    return new Date(timestamp).toLocaleString();
-                } catch (error) {
-                    return 'Just now';
-                }
-            }
-
-            escapeHtml(text) {
-                if (!text) return '';
-                const div = document.createElement('div');
-                div.textContent = text;
-                return div.innerHTML;
-            }
-
-            showError(message) {
-                const errorDiv = document.createElement('div');
-                errorDiv.style.cssText = `
-                    position: fixed;
-                    top: 80px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                    background: #f44336;
-                    color: white;
-                    padding: 15px 20px;
-                    border-radius: 8px;
-                    z-index: 1001;
-                    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-                `;
-                errorDiv.textContent = message;
-                document.body.appendChild(errorDiv);
-                
-                setTimeout(() => {
-                    if (errorDiv.parentNode) {
-                        errorDiv.parentNode.removeChild(errorDiv);
-                    }
-                }, 5000);
-            }
-
-            // Debug helper function
-            debug() {
-                console.log('=== THOUGHT BOARD DEBUG ===');
-                console.log('Using Firebase:', this.useFirebase);
-                console.log('Number of thoughts:', this.thoughts.length);
-                console.log('Thoughts:', this.thoughts);
-                console.log('Firebase DB:', this.db);
-                
-                // Test if we can find elements
-                this.thoughts.forEach((thought, index) => {
-                    console.log(`Thought ${index}: ID=${thought.id}, replies=${thought.replies?.length || 0}`);
-                    const replyForm = document.getElementById(`replyForm-${thought.id}`);
-                    const adviceForm = document.getElementById(`adviceForm-${thought.id}`);
-                    console.log(`  Forms exist: reply=${!!replyForm}, advice=${!!adviceForm}`);
-                });
-                console.log('========================');
+        // Save thoughts to localStorage
+        function saveThoughts() {
+            try {
+                localStorage.setItem('thoughts', JSON.stringify(thoughts));
+            } catch (error) {
+                console.error('Error saving thoughts:', error);
             }
         }
 
-        // Initialize the thought board when page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            window.thoughtBoard = new ThoughtBoard();
+        // Add a new thought
+        function addThought(content) {
+            const thought = {
+                id: nextId++,
+                author: "Anonymous",
+                content: content,
+                timestamp: new Date().toLocaleString(),
+                replies: []
+            };
             
-            // Make debug function available globally
-            window.debugThoughts = () => window.thoughtBoard.debug();
+            thoughts.unshift(thought);
+            saveThoughts();
+            renderThoughts();
             
-            console.log('Thought board initialized. Type "debugThoughts()" in console for debug info.');
+            console.log('Added thought:', thought);
+        }
+
+        // Add a reply to a thought
+        function addReply(thoughtId, content, isAdvice = false) {
+            console.log('Adding reply to thought ID:', thoughtId);
+            
+            const thought = thoughts.find(t => t.id == thoughtId);
+            if (!thought) {
+                console.error('Thought not found with ID:', thoughtId);
+                alert('Could not find the thought to reply to.');
+                return;
+            }
+
+            const reply = {
+                id: nextId++,
+                author: isAdvice ? "English Teacher" : "Anonymous",
+                content: content,
+                timestamp: new Date().toLocaleString(),
+                isAdvice: isAdvice
+            };
+
+            thought.replies.push(reply);
+            saveThoughts();
+            renderThoughts();
+            
+            console.log('Added reply:', reply, 'to thought:', thought.id);
+        }
+
+        // Delete a thought
+        function deleteThought(thoughtId) {
+            if (!confirm('Are you sure you want to delete this thought?')) {
+                return;
+            }
+            
+            console.log('Deleting thought ID:', thoughtId);
+            thoughts = thoughts.filter(t => t.id != thoughtId);
+            saveThoughts();
+            renderThoughts();
+        }
+
+        // Show/hide reply form
+        function toggleReplyForm(thoughtId) {
+            const replyForm = document.getElementById(`replyForm-${thoughtId}`);
+            const adviceForm = document.getElementById(`adviceForm-${thoughtId}`);
+            
+            if (adviceForm) {
+                adviceForm.classList.remove('active');
+            }
+            
+            if (replyForm) {
+                replyForm.classList.toggle('active');
+            }
+        }
+
+        // Show/hide advice form
+        function toggleAdviceForm(thoughtId) {
+            const replyForm = document.getElementById(`replyForm-${thoughtId}`);
+            const adviceForm = document.getElementById(`adviceForm-${thoughtId}`);
+            
+            if (replyForm) {
+                replyForm.classList.remove('active');
+            }
+            
+            if (adviceForm) {
+                adviceForm.classList.toggle('active');
+            }
+        }
+
+        // Submit a reply
+        function submitReply(thoughtId, isAdvice = false) {
+            const formType = isAdvice ? 'advice' : 'reply';
+            const textarea = document.getElementById(`${formType}Content-${thoughtId}`);
+            const content = textarea.value.trim();
+            
+            if (!content) {
+                alert('Please write something before submitting.');
+                return;
+            }
+
+            addReply(thoughtId, content, isAdvice);
+            
+            // Clear form and hide it
+            textarea.value = '';
+            const form = document.getElementById(`${formType}Form-${thoughtId}`);
+            if (form) {
+                form.classList.remove('active');
+            }
+        }
+
+        // Render all thoughts
+        function renderThoughts() {
+            const container = document.getElementById('thoughtsContainer');
+            
+            if (thoughts.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>No thoughts shared yet</h3>
+                        <p>Be the first to share something interesting!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = thoughts.map(thought => `
+                <div class="thought-card">
+                    <div class="thought-header">
+                        <span class="author">${escapeHtml(thought.author)}</span>
+                        <span class="timestamp">${thought.timestamp}</span>
+                    </div>
+                    <div class="thought-content">${escapeHtml(thought.content)}</div>
+                    
+                    <div class="actions">
+                        <button class="btn btn-small" onclick="toggleReplyForm(${thought.id})">💬 Reply</button>
+                        <button class="btn btn-small btn-advice" onclick="toggleAdviceForm(${thought.id})">📝 Give English Advice</button>
+                        <button class="btn btn-small btn-delete" onclick="deleteThought(${thought.id})">🗑️ Delete</button>
+                    </div>
+
+                    <div class="reply-form" id="replyForm-${thought.id}">
+                        <div class="form-group">
+                            <label>Your Reply:</label>
+                            <textarea id="replyContent-${thought.id}" placeholder="Write your reply..."></textarea>
+                        </div>
+                        <button class="btn btn-small" onclick="submitReply(${thought.id}, false)">Send Reply</button>
+                    </div>
+
+                    <div class="reply-form" id="adviceForm-${thought.id}">
+                        <div class="form-group">
+                            <label>English Advice:</label>
+                            <textarea id="adviceContent-${thought.id}" placeholder="Provide helpful English corrections, suggestions, or encouragement..."></textarea>
+                        </div>
+                        <button class="btn btn-small btn-advice" onclick="submitReply(${thought.id}, true)">Give Advice</button>
+                    </div>
+
+                    ${thought.replies && thought.replies.length > 0 ? `
+                        <div class="replies-section">
+                            <h4 style="margin-bottom: 15px; color: #666; font-size: 14px;">💭 Replies (${thought.replies.length})</h4>
+                            ${thought.replies.map(reply => `
+                                <div class="reply ${reply.isAdvice ? 'advice' : ''}">
+                                    <div class="reply-header">
+                                        <span class="reply-author ${reply.isAdvice ? 'advice-author' : ''}">
+                                            ${reply.isAdvice ? '👨‍🏫 ' : ''}${escapeHtml(reply.author)}
+                                        </span>
+                                        <span class="timestamp">${reply.timestamp}</span>
+                                    </div>
+                                    <div>${escapeHtml(reply.content)}</div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    ` : ''}
+                </div>
+            `).join('');
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Initialize when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('Initializing thought board...');
+            
+            // Load existing thoughts
+            loadThoughts();
+            
+            // Handle form submission
+            document.getElementById('thoughtForm').addEventListener('submit', function(e) {
+                e.preventDefault();
+                const content = document.getElementById('thoughtContent').value.trim();
+                if (content) {
+                    addThought(content);
+                    document.getElementById('thoughtContent').value = '';
+                }
+            });
+            
+            console.log('Thought board initialized with', thoughts.length, 'thoughts');
         });
+
+        // Debug function
+        function debug() {
+            console.log('=== DEBUG INFO ===');
+            console.log('Number of thoughts:', thoughts.length);
+            console.log('Thoughts:', thoughts);
+            thoughts.forEach(thought => {
+                console.log(`Thought ${thought.id}: "${thought.content}" (${thought.replies.length} replies)`);
+            });
+        }
     </script>
 </body>
 </html>
