@@ -101,6 +101,11 @@
             background: #45a049;
         }
 
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
         .btn-small {
             padding: 6px 12px;
             font-size: 14px;
@@ -223,6 +228,28 @@
             color: #888;
         }
 
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #666;
+        }
+
+        .online-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #4CAF50;
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            z-index: 1000;
+        }
+
+        .online-indicator.offline {
+            background: #f44336;
+        }
+
         @media (max-width: 600px) {
             .container {
                 margin: 10px;
@@ -240,10 +267,17 @@
             .content {
                 padding: 20px;
             }
+
+            .online-indicator {
+                top: 10px;
+                right: 10px;
+            }
         }
     </style>
 </head>
 <body>
+    <div class="online-indicator" id="onlineIndicator">🌐 Connected</div>
+    
     <div class="container">
         <div class="header">
             <h1>🌟 Share Your Thoughts</h1>
@@ -258,99 +292,160 @@
                     <label for="thoughtContent">Your Thought:</label>
                     <textarea id="thoughtContent" placeholder="What's on your mind? Share anything - a story, question, observation, or just how you're feeling today..." required></textarea>
                 </div>
-                <button type="submit" class="btn">Share Thought 🚀</button>
+                <button type="submit" class="btn" id="submitBtn">Share Thought 🚀</button>
             </form>
 
             <div class="thoughts-container" id="thoughtsContainer">
-                <div class="empty-state" id="emptyState">
-                    <h3>No thoughts shared yet</h3>
-                    <p>Be the first to share something interesting!</p>
+                <div class="loading" id="loadingState">
+                    <h3>Loading thoughts...</h3>
+                    <p>Connecting to the cloud ☁️</p>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Firebase SDKs -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+
     <script>
+        // Firebase configuration
+        const firebaseConfig = {
+            apiKey: "AIzaSyC3z1wVUk8A75gNKM_-SvzdIRwYnFG8uzM",
+            authDomain: "thought-website-7b7a3.firebaseapp.com",
+            projectId: "thought-website-7b7a3",
+            storageBucket: "thought-website-7b7a3.firebasestorage.app",
+            messagingSenderId: "109248529056",
+            appId: "1:109248529056:web:c8049e93cedcfc2388bfc5",
+            measurementId: "G-QLMPB5VMGN"
+        };
+
+        // Initialize Firebase
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
+
         class ThoughtBoard {
             constructor() {
-                this.thoughts = JSON.parse(localStorage.getItem('thoughts')) || [];
+                this.thoughts = [];
                 this.thoughtForm = document.getElementById('thoughtForm');
                 this.thoughtsContainer = document.getElementById('thoughtsContainer');
-                this.emptyState = document.getElementById('emptyState');
+                this.loadingState = document.getElementById('loadingState');
+                this.submitBtn = document.getElementById('submitBtn');
+                this.onlineIndicator = document.getElementById('onlineIndicator');
                 
                 this.init();
             }
 
             init() {
                 this.thoughtForm.addEventListener('submit', (e) => this.handleThoughtSubmit(e));
-                this.renderThoughts();
+                this.setupRealtimeListener();
+                this.setupConnectionMonitoring();
             }
 
-            handleThoughtSubmit(e) {
+            setupConnectionMonitoring() {
+                window.addEventListener('online', () => {
+                    this.onlineIndicator.textContent = '🌐 Connected';
+                    this.onlineIndicator.classList.remove('offline');
+                });
+
+                window.addEventListener('offline', () => {
+                    this.onlineIndicator.textContent = '📱 Offline';
+                    this.onlineIndicator.classList.add('offline');
+                });
+            }
+
+            setupRealtimeListener() {
+                // Listen for real-time updates
+                db.collection('thoughts')
+                    .orderBy('timestamp', 'desc')
+                    .onSnapshot((snapshot) => {
+                        this.thoughts = [];
+                        snapshot.forEach((doc) => {
+                            this.thoughts.push({
+                                id: doc.id,
+                                ...doc.data()
+                            });
+                        });
+                        this.renderThoughts();
+                        this.loadingState.style.display = 'none';
+                    }, (error) => {
+                        console.error('Error listening to thoughts:', error);
+                        this.showError('Failed to load thoughts. Please refresh the page.');
+                    });
+            }
+
+            async handleThoughtSubmit(e) {
                 e.preventDefault();
                 
                 const content = document.getElementById('thoughtContent').value.trim();
                 
                 if (!content) return;
 
-                const thought = {
-                    id: Date.now(),
-                    author: "Anonymous",
-                    content: content,
-                    timestamp: new Date().toLocaleString(),
-                    replies: []
-                };
+                // Disable submit button
+                this.submitBtn.disabled = true;
+                this.submitBtn.textContent = 'Sharing...';
 
-                this.thoughts.unshift(thought);
-                this.saveThoughts();
-                this.renderThoughts();
-                this.thoughtForm.reset();
+                try {
+                    const thought = {
+                        author: "Anonymous",
+                        content: content,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        replies: []
+                    };
+
+                    await db.collection('thoughts').add(thought);
+                    this.thoughtForm.reset();
+                } catch (error) {
+                    console.error('Error adding thought:', error);
+                    this.showError('Failed to share thought. Please try again.');
+                } finally {
+                    this.submitBtn.disabled = false;
+                    this.submitBtn.textContent = 'Share Thought 🚀';
+                }
             }
 
-            addReply(thoughtId, author, content, isAdvice = false) {
-                const thought = this.thoughts.find(t => t.id === thoughtId);
-                if (!thought) return;
+            async addReply(thoughtId, author, content, isAdvice = false) {
+                try {
+                    const reply = {
+                        author: author,
+                        content: content,
+                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        isAdvice: isAdvice
+                    };
 
-                const reply = {
-                    id: Date.now(),
-                    author: author,
-                    content: content,
-                    timestamp: new Date().toLocaleString(),
-                    isAdvice: isAdvice
-                };
-
-                thought.replies.push(reply);
-                this.saveThoughts();
-                this.renderThoughts();
-            }
-
-            saveThoughts() {
-                localStorage.setItem('thoughts', JSON.stringify(this.thoughts));
+                    await db.collection('thoughts').doc(thoughtId).update({
+                        replies: firebase.firestore.FieldValue.arrayUnion(reply)
+                    });
+                } catch (error) {
+                    console.error('Error adding reply:', error);
+                    this.showError('Failed to add reply. Please try again.');
+                }
             }
 
             renderThoughts() {
                 if (this.thoughts.length === 0) {
-                    this.emptyState.style.display = 'block';
-                    this.thoughtsContainer.innerHTML = '';
-                    this.thoughtsContainer.appendChild(this.emptyState);
+                    this.thoughtsContainer.innerHTML = `
+                        <div class="empty-state">
+                            <h3>No thoughts shared yet</h3>
+                            <p>Be the first to share something interesting!</p>
+                        </div>
+                    `;
                     return;
                 }
-
-                this.emptyState.style.display = 'none';
                 
                 this.thoughtsContainer.innerHTML = this.thoughts.map(thought => `
                     <div class="thought-card">
                         <div class="thought-header">
                             <span class="author">${this.escapeHtml(thought.author)}</span>
-                            <span class="timestamp">${thought.timestamp}</span>
+                            <span class="timestamp">${this.formatTimestamp(thought.timestamp)}</span>
                         </div>
                         <div class="thought-content">${this.escapeHtml(thought.content)}</div>
                         
                         <div class="actions">
-                            <button class="btn btn-small" onclick="thoughtBoard.toggleReplyForm(${thought.id})">
+                            <button class="btn btn-small" onclick="thoughtBoard.toggleReplyForm('${thought.id}')">
                                 💬 Reply
                             </button>
-                            <button class="btn btn-small btn-advice" onclick="thoughtBoard.toggleAdviceForm(${thought.id})">
+                            <button class="btn btn-small btn-advice" onclick="thoughtBoard.toggleAdviceForm('${thought.id}')">
                                 📝 Give English Advice
                             </button>
                         </div>
@@ -360,7 +455,7 @@
                                 <label>Your Reply:</label>
                                 <textarea id="replyContent-${thought.id}" placeholder="Write your reply..."></textarea>
                             </div>
-                            <button class="btn btn-small" onclick="thoughtBoard.submitReply(${thought.id}, false)">
+                            <button class="btn btn-small" onclick="thoughtBoard.submitReply('${thought.id}', false)">
                                 Send Reply
                             </button>
                         </div>
@@ -370,12 +465,12 @@
                                 <label>English Advice:</label>
                                 <textarea id="adviceContent-${thought.id}" placeholder="Provide helpful English corrections, suggestions, or encouragement..."></textarea>
                             </div>
-                            <button class="btn btn-small btn-advice" onclick="thoughtBoard.submitReply(${thought.id}, true)">
+                            <button class="btn btn-small btn-advice" onclick="thoughtBoard.submitReply('${thought.id}', true)">
                                 Give Advice
                             </button>
                         </div>
 
-                        ${thought.replies.length > 0 ? `
+                        ${thought.replies && thought.replies.length > 0 ? `
                             <div class="replies-section">
                                 <h4 style="margin-bottom: 15px; color: #666; font-size: 14px;">
                                     💭 Replies (${thought.replies.length})
@@ -386,7 +481,7 @@
                                             <span class="reply-author ${reply.isAdvice ? 'advice-author' : ''}">
                                                 ${reply.isAdvice ? '👨‍🏫 ' : ''}${this.escapeHtml(reply.author)}
                                             </span>
-                                            <span class="timestamp">${reply.timestamp}</span>
+                                            <span class="timestamp">${this.formatTimestamp(reply.timestamp)}</span>
                                         </div>
                                         <div>${this.escapeHtml(reply.content)}</div>
                                     </div>
@@ -401,21 +496,22 @@
                 const replyForm = document.getElementById(`replyForm-${thoughtId}`);
                 const adviceForm = document.getElementById(`adviceForm-${thoughtId}`);
                 
-                adviceForm.classList.remove('active');
-                replyForm.classList.toggle('active');
+                if (adviceForm) adviceForm.classList.remove('active');
+                if (replyForm) replyForm.classList.toggle('active');
             }
 
             toggleAdviceForm(thoughtId) {
                 const replyForm = document.getElementById(`replyForm-${thoughtId}`);
                 const adviceForm = document.getElementById(`adviceForm-${thoughtId}`);
                 
-                replyForm.classList.remove('active');
-                adviceForm.classList.toggle('active');
+                if (replyForm) replyForm.classList.remove('active');
+                if (adviceForm) adviceForm.classList.toggle('active');
             }
 
-            submitReply(thoughtId, isAdvice) {
+            async submitReply(thoughtId, isAdvice) {
                 const formType = isAdvice ? 'advice' : 'reply';
-                const content = document.getElementById(`${formType}Content-${thoughtId}`).value.trim();
+                const contentElement = document.getElementById(`${formType}Content-${thoughtId}`);
+                const content = contentElement.value.trim();
                 
                 if (!content) {
                     alert('Please write something before submitting.');
@@ -423,22 +519,64 @@
                 }
 
                 const author = isAdvice ? "English Teacher" : "Anonymous";
-                this.addReply(thoughtId, author, content, isAdvice);
                 
-                // Clear and hide the form
-                document.getElementById(`${formType}Content-${thoughtId}`).value = '';
-                document.getElementById(`${formType}Form-${thoughtId}`).classList.remove('active');
+                try {
+                    await this.addReply(thoughtId, author, content, isAdvice);
+                    
+                    // Clear and hide the form
+                    contentElement.value = '';
+                    const form = document.getElementById(`${formType}Form-${thoughtId}`);
+                    if (form) form.classList.remove('active');
+                } catch (error) {
+                    console.error('Error submitting reply:', error);
+                }
+            }
+
+            formatTimestamp(timestamp) {
+                if (!timestamp) return 'Just now';
+                
+                // Handle Firestore Timestamp
+                const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
+                return date.toLocaleString();
             }
 
             escapeHtml(text) {
+                if (!text) return '';
                 const div = document.createElement('div');
                 div.textContent = text;
                 return div.innerHTML;
             }
+
+            showError(message) {
+                // Simple error display - you could make this more elegant
+                const errorDiv = document.createElement('div');
+                errorDiv.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                    background: #f44336;
+                    color: white;
+                    padding: 15px 20px;
+                    border-radius: 8px;
+                    z-index: 1001;
+                    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+                `;
+                errorDiv.textContent = message;
+                document.body.appendChild(errorDiv);
+                
+                setTimeout(() => {
+                    if (errorDiv.parentNode) {
+                        errorDiv.parentNode.removeChild(errorDiv);
+                    }
+                }, 5000);
+            }
         }
 
-        // Initialize the thought board
-        const thoughtBoard = new ThoughtBoard();
+        // Initialize the thought board when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.thoughtBoard = new ThoughtBoard();
+        });
     </script>
 </body>
 </html>
