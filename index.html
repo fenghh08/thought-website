@@ -396,13 +396,18 @@
                 this.db.collection('thoughts')
                     .orderBy('timestamp', 'desc')
                     .onSnapshot((snapshot) => {
+                        console.log('Firebase snapshot received, documents:', snapshot.size);
                         this.thoughts = [];
                         snapshot.forEach((doc) => {
+                            const data = doc.data();
                             this.thoughts.push({
                                 id: doc.id,
-                                ...doc.data()
+                                ...data,
+                                // Ensure replies array exists
+                                replies: data.replies || []
                             });
                         });
+                        console.log('Updated thoughts from Firebase:', this.thoughts.length);
                         this.renderThoughts();
                     }, (error) => {
                         console.error('Error listening to thoughts:', error);
@@ -452,19 +457,23 @@
                         author: "Anonymous",
                         content: content,
                         timestamp: new Date(),
-                        replies: []
+                        replies: [] // Ensure replies array exists from the start
                     };
 
                     if (this.useFirebase) {
                         const firebaseThought = {
-                            ...thought,
-                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                            author: thought.author,
+                            content: thought.content,
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                            replies: []
                         };
-                        await this.db.collection('thoughts').add(firebaseThought);
+                        const docRef = await this.db.collection('thoughts').add(firebaseThought);
+                        console.log('Firebase thought added with ID:', docRef.id);
                     } else {
                         this.thoughts.unshift(thought);
                         this.saveThoughtsLocal();
                         this.renderThoughts();
+                        console.log('Local thought added with ID:', thought.id);
                     }
                     
                     this.thoughtForm.reset();
@@ -478,37 +487,73 @@
             }
 
             async addReply(thoughtId, author, content, isAdvice = false) {
-                try {
-                    const reply = {
-                        id: Date.now().toString(),
-                        author: author,
-                        content: content,
-                        timestamp: new Date(),
-                        isAdvice: isAdvice
-                    };
+                console.log('Adding reply to thought:', thoughtId, 'Firebase mode:', this.useFirebase);
+                
+                const reply = {
+                    id: Date.now().toString(),
+                    author: author,
+                    content: content,
+                    timestamp: new Date(),
+                    isAdvice: isAdvice
+                };
 
-                    if (this.useFirebase) {
-                        const thoughtDoc = await this.db.collection('thoughts').doc(thoughtId).get();
-                        if (thoughtDoc.exists) {
+                if (this.useFirebase && this.db) {
+                    try {
+                        console.log('Attempting Firebase reply update...');
+                        
+                        // Use transaction to ensure data consistency
+                        await this.db.runTransaction(async (transaction) => {
+                            const thoughtRef = this.db.collection('thoughts').doc(thoughtId);
+                            const thoughtDoc = await transaction.get(thoughtRef);
+                            
+                            if (!thoughtDoc.exists) {
+                                throw new Error('Thought document does not exist');
+                            }
+                            
                             const thoughtData = thoughtDoc.data();
                             const currentReplies = thoughtData.replies || [];
                             currentReplies.push(reply);
                             
-                            await this.db.collection('thoughts').doc(thoughtId).update({
-                                replies: currentReplies
-                            });
+                            transaction.update(thoughtRef, { replies: currentReplies });
+                        });
+                        
+                        console.log('Firebase reply added successfully');
+                        return true;
+                    } catch (error) {
+                        console.error('Firebase reply failed:', error);
+                        console.log('Falling back to local storage for reply');
+                        return this.addReplyLocal(thoughtId, reply);
+                    }
+                } else {
+                    console.log('Using local reply storage');
+                    return this.addReplyLocal(thoughtId, reply);
+                }
+            }
+
+            addReplyLocal(thoughtId, reply) {
+                try {
+                    console.log('Looking for thought with ID:', thoughtId, 'in', this.thoughts.length, 'thoughts');
+                    
+                    const thought = this.thoughts.find(t => t.id === thoughtId);
+                    if (thought) {
+                        if (!thought.replies) {
+                            thought.replies = [];
                         }
+                        thought.replies.push(reply);
+                        this.saveThoughtsLocal();
+                        this.renderThoughts();
+                        console.log('Local reply added successfully. Thought now has', thought.replies.length, 'replies');
+                        return true;
                     } else {
-                        const thought = this.thoughts.find(t => t.id === thoughtId);
-                        if (thought) {
-                            thought.replies.push(reply);
-                            this.saveThoughtsLocal();
-                            this.renderThoughts();
-                        }
+                        console.error('Thought not found with ID:', thoughtId);
+                        console.log('Available thought IDs:', this.thoughts.map(t => t.id));
+                        this.showError('Could not find the thought to reply to.');
+                        return false;
                     }
                 } catch (error) {
-                    console.error('Error adding reply:', error);
+                    console.error('Error adding local reply:', error);
                     this.showError('Failed to add reply. Please try again.');
+                    return false;
                 }
             }
 
@@ -634,6 +679,13 @@
             async submitReply(thoughtId, isAdvice) {
                 const formType = isAdvice ? 'advice' : 'reply';
                 const contentElement = document.getElementById(`${formType}Content-${thoughtId}`);
+                
+                if (!contentElement) {
+                    console.error('Could not find form element:', `${formType}Content-${thoughtId}`);
+                    this.showError('Form not found. Please refresh the page.');
+                    return;
+                }
+                
                 const content = contentElement.value.trim();
                 
                 if (!content) {
@@ -643,15 +695,33 @@
 
                 const author = isAdvice ? "English Teacher" : "Anonymous";
                 
+                console.log('Submitting reply:', { thoughtId, author, content, isAdvice });
+                
+                // Show loading state
+                const submitButton = contentElement.parentNode.querySelector('.btn');
+                const originalText = submitButton.textContent;
+                submitButton.disabled = true;
+                submitButton.textContent = 'Sending...';
+                
                 try {
-                    await this.addReply(thoughtId, author, content, isAdvice);
+                    const success = await this.addReply(thoughtId, author, content, isAdvice);
                     
-                    // Clear and hide the form
-                    contentElement.value = '';
-                    const form = document.getElementById(`${formType}Form-${thoughtId}`);
-                    if (form) form.classList.remove('active');
+                    if (success) {
+                        // Clear and hide the form
+                        contentElement.value = '';
+                        const form = document.getElementById(`${formType}Form-${thoughtId}`);
+                        if (form) form.classList.remove('active');
+                        console.log('Reply submitted successfully');
+                    } else {
+                        this.showError('Failed to submit reply. Please try again.');
+                    }
                 } catch (error) {
                     console.error('Error submitting reply:', error);
+                    this.showError('Failed to submit reply. Please try again.');
+                } finally {
+                    // Restore button state
+                    submitButton.disabled = false;
+                    submitButton.textContent = originalText;
                 }
             }
 
@@ -701,11 +771,34 @@
                     }
                 }, 5000);
             }
+
+            // Debug helper function
+            debug() {
+                console.log('=== THOUGHT BOARD DEBUG ===');
+                console.log('Using Firebase:', this.useFirebase);
+                console.log('Number of thoughts:', this.thoughts.length);
+                console.log('Thoughts:', this.thoughts);
+                console.log('Firebase DB:', this.db);
+                
+                // Test if we can find elements
+                this.thoughts.forEach((thought, index) => {
+                    console.log(`Thought ${index}: ID=${thought.id}, replies=${thought.replies?.length || 0}`);
+                    const replyForm = document.getElementById(`replyForm-${thought.id}`);
+                    const adviceForm = document.getElementById(`adviceForm-${thought.id}`);
+                    console.log(`  Forms exist: reply=${!!replyForm}, advice=${!!adviceForm}`);
+                });
+                console.log('========================');
+            }
         }
 
         // Initialize the thought board when page loads
         document.addEventListener('DOMContentLoaded', () => {
             window.thoughtBoard = new ThoughtBoard();
+            
+            // Make debug function available globally
+            window.debugThoughts = () => window.thoughtBoard.debug();
+            
+            console.log('Thought board initialized. Type "debugThoughts()" in console for debug info.');
         });
     </script>
 </body>
