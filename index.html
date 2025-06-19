@@ -304,28 +304,53 @@
         </div>
     </div>
 
-    <!-- Firebase SDKs -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-app-compat.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/firebase/9.23.0/firebase-firestore-compat.min.js"></script>
+    <!-- Firebase v8 SDK -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <script>
-        // Firebase configuration
-        const firebaseConfig = {
-            apiKey: "AIzaSyC3z1wVUk8A75gNKM_-SvzdIRwYnFG8uzM",
-            authDomain: "thought-website-7b7a3.firebaseapp.com",
-            projectId: "thought-website-7b7a3",
-            storageBucket: "thought-website-7b7a3.firebasestorage.app",
-            messagingSenderId: "109248529056",
-            appId: "1:109248529056:web:c8049e93cedcfc2388bfc5",
-            measurementId: "G-QLMPB5VMGN"
-        };
+        // Wait for Firebase to load, then initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if Firebase loaded
+            if (typeof firebase === 'undefined') {
+                console.error('Firebase failed to load');
+                document.getElementById('loadingState').innerHTML = `
+                    <h3>Connection Error</h3>
+                    <p>Failed to load Firebase. Please check your internet connection and refresh the page.</p>
+                `;
+                return;
+            }
 
-        // Initialize Firebase
-        firebase.initializeApp(firebaseConfig);
-        const db = firebase.firestore();
+            // Firebase configuration
+            const firebaseConfig = {
+                apiKey: "AIzaSyC3z1wVUk8A75gNKM_-SvzdIRwYnFG8uzM",
+                authDomain: "thought-website-7b7a3.firebaseapp.com",
+                projectId: "thought-website-7b7a3",
+                storageBucket: "thought-website-7b7a3.firebasestorage.app",
+                messagingSenderId: "109248529056",
+                appId: "1:109248529056:web:c8049e93cedcfc2388bfc5",
+                measurementId: "G-QLMPB5VMGN"
+            };
+
+            try {
+                // Initialize Firebase
+                firebase.initializeApp(firebaseConfig);
+                const db = firebase.firestore();
+                
+                // Initialize the thought board
+                window.thoughtBoard = new ThoughtBoard(db);
+            } catch (error) {
+                console.error('Firebase initialization error:', error);
+                document.getElementById('loadingState').innerHTML = `
+                    <h3>Setup Error</h3>
+                    <p>There was a problem connecting to the database. Please try refreshing the page.</p>
+                `;
+            }
+        });
 
         class ThoughtBoard {
-            constructor() {
+            constructor(database) {
+                this.db = database;
                 this.thoughts = [];
                 this.thoughtForm = document.getElementById('thoughtForm');
                 this.thoughtsContainer = document.getElementById('thoughtsContainer');
@@ -356,7 +381,7 @@
 
             setupRealtimeListener() {
                 // Listen for real-time updates
-                db.collection('thoughts')
+                this.db.collection('thoughts')
                     .orderBy('timestamp', 'desc')
                     .onSnapshot((snapshot) => {
                         this.thoughts = [];
@@ -393,7 +418,7 @@
                         replies: []
                     };
 
-                    await db.collection('thoughts').add(thought);
+                    await this.db.collection('thoughts').add(thought);
                     this.thoughtForm.reset();
                 } catch (error) {
                     console.error('Error adding thought:', error);
@@ -413,7 +438,7 @@
                         isAdvice: isAdvice
                     };
 
-                    await db.collection('thoughts').doc(thoughtId).update({
+                    await this.db.collection('thoughts').doc(thoughtId).update({
                         replies: firebase.firestore.FieldValue.arrayUnion(reply)
                     });
                 } catch (error) {
@@ -572,11 +597,6 @@
                 }, 5000);
             }
         }
-
-        // Initialize the thought board when page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            window.thoughtBoard = new ThoughtBoard();
-        });
     </script>
 </body>
 </html>
