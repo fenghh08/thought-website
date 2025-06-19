@@ -120,6 +120,14 @@
             background: #1976D2;
         }
 
+        .btn-delete {
+            background: #f44336;
+        }
+
+        .btn-delete:hover {
+            background: #d32f2f;
+        }
+
         .thoughts-container {
             margin-top: 20px;
         }
@@ -228,13 +236,7 @@
             color: #888;
         }
 
-        .loading {
-            text-align: center;
-            padding: 40px;
-            color: #666;
-        }
-
-        .online-indicator {
+        .status-indicator {
             position: fixed;
             top: 20px;
             right: 20px;
@@ -246,7 +248,11 @@
             z-index: 1000;
         }
 
-        .online-indicator.offline {
+        .status-indicator.local {
+            background: #ff9800;
+        }
+
+        .status-indicator.error {
             background: #f44336;
         }
 
@@ -268,7 +274,7 @@
                 padding: 20px;
             }
 
-            .online-indicator {
+            .status-indicator {
                 top: 10px;
                 right: 10px;
             }
@@ -276,7 +282,7 @@
     </style>
 </head>
 <body>
-    <div class="online-indicator" id="onlineIndicator">🌐 Connected</div>
+    <div class="status-indicator" id="statusIndicator">⏳ Loading...</div>
     
     <div class="container">
         <div class="header">
@@ -296,91 +302,97 @@
             </form>
 
             <div class="thoughts-container" id="thoughtsContainer">
-                <div class="loading" id="loadingState">
+                <div class="empty-state" id="emptyState">
                     <h3>Loading thoughts...</h3>
-                    <p>Connecting to the cloud ☁️</p>
+                    <p>Setting up your thought board...</p>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Firebase v8 SDK -->
+    <!-- Try to load Firebase, but continue without it if it fails -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <script>
-        // Wait for Firebase to load, then initialize
-        document.addEventListener('DOMContentLoaded', function() {
-            // Check if Firebase loaded
-            if (typeof firebase === 'undefined') {
-                console.error('Firebase failed to load');
-                document.getElementById('loadingState').innerHTML = `
-                    <h3>Connection Error</h3>
-                    <p>Failed to load Firebase. Please check your internet connection and refresh the page.</p>
-                `;
-                return;
-            }
-
-            // Firebase configuration
-            const firebaseConfig = {
-                apiKey: "AIzaSyC3z1wVUk8A75gNKM_-SvzdIRwYnFG8uzM",
-                authDomain: "thought-website-7b7a3.firebaseapp.com",
-                projectId: "thought-website-7b7a3",
-                storageBucket: "thought-website-7b7a3.firebasestorage.app",
-                messagingSenderId: "109248529056",
-                appId: "1:109248529056:web:c8049e93cedcfc2388bfc5",
-                measurementId: "G-QLMPB5VMGN"
-            };
-
-            try {
-                // Initialize Firebase
-                firebase.initializeApp(firebaseConfig);
-                const db = firebase.firestore();
-                
-                // Initialize the thought board
-                window.thoughtBoard = new ThoughtBoard(db);
-            } catch (error) {
-                console.error('Firebase initialization error:', error);
-                document.getElementById('loadingState').innerHTML = `
-                    <h3>Setup Error</h3>
-                    <p>There was a problem connecting to the database. Please try refreshing the page.</p>
-                `;
-            }
-        });
-
         class ThoughtBoard {
-            constructor(database) {
-                this.db = database;
+            constructor() {
                 this.thoughts = [];
                 this.thoughtForm = document.getElementById('thoughtForm');
                 this.thoughtsContainer = document.getElementById('thoughtsContainer');
-                this.loadingState = document.getElementById('loadingState');
+                this.emptyState = document.getElementById('emptyState');
                 this.submitBtn = document.getElementById('submitBtn');
-                this.onlineIndicator = document.getElementById('onlineIndicator');
+                this.statusIndicator = document.getElementById('statusIndicator');
+                this.useFirebase = false;
+                this.db = null;
                 
                 this.init();
             }
 
-            init() {
+            async init() {
+                // Try to initialize Firebase
+                await this.initializeFirebase();
+                
                 this.thoughtForm.addEventListener('submit', (e) => this.handleThoughtSubmit(e));
-                this.setupRealtimeListener();
+                this.loadThoughts();
                 this.setupConnectionMonitoring();
+            }
+
+            async initializeFirebase() {
+                try {
+                    // Wait a bit for Firebase to load
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                    
+                    if (typeof firebase !== 'undefined') {
+                        const firebaseConfig = {
+                            apiKey: "AIzaSyC3z1wVUk8A75gNKM_-SvzdIRwYnFG8uzM",
+                            authDomain: "thought-website-7b7a3.firebaseapp.com",
+                            projectId: "thought-website-7b7a3",
+                            storageBucket: "thought-website-7b7a3.firebasestorage.app",
+                            messagingSenderId: "109248529056",
+                            appId: "1:109248529056:web:c8049e93cedcfc2388bfc5",
+                            measurementId: "G-QLMPB5VMGN"
+                        };
+
+                        firebase.initializeApp(firebaseConfig);
+                        this.db = firebase.firestore();
+                        this.useFirebase = true;
+                        this.statusIndicator.textContent = '🌐 Cloud Connected';
+                        this.statusIndicator.className = 'status-indicator';
+                        
+                        // Set up real-time listener
+                        this.setupRealtimeListener();
+                        console.log('Firebase connected successfully');
+                        return;
+                    }
+                } catch (error) {
+                    console.log('Firebase failed to initialize:', error);
+                }
+                
+                // Fallback to localStorage
+                this.useFirebase = false;
+                this.statusIndicator.textContent = '📱 Local Mode';
+                this.statusIndicator.className = 'status-indicator local';
+                console.log('Using local storage mode');
             }
 
             setupConnectionMonitoring() {
                 window.addEventListener('online', () => {
-                    this.onlineIndicator.textContent = '🌐 Connected';
-                    this.onlineIndicator.classList.remove('offline');
+                    if (this.useFirebase) {
+                        this.statusIndicator.textContent = '🌐 Cloud Connected';
+                        this.statusIndicator.className = 'status-indicator';
+                    }
                 });
 
                 window.addEventListener('offline', () => {
-                    this.onlineIndicator.textContent = '📱 Offline';
-                    this.onlineIndicator.classList.add('offline');
+                    this.statusIndicator.textContent = '📱 Offline';
+                    this.statusIndicator.className = 'status-indicator error';
                 });
             }
 
             setupRealtimeListener() {
-                // Listen for real-time updates
+                if (!this.useFirebase) return;
+                
                 this.db.collection('thoughts')
                     .orderBy('timestamp', 'desc')
                     .onSnapshot((snapshot) => {
@@ -392,11 +404,35 @@
                             });
                         });
                         this.renderThoughts();
-                        this.loadingState.style.display = 'none';
                     }, (error) => {
                         console.error('Error listening to thoughts:', error);
-                        this.showError('Failed to load thoughts. Please refresh the page.');
+                        this.fallbackToLocal();
                     });
+            }
+
+            fallbackToLocal() {
+                this.useFirebase = false;
+                this.statusIndicator.textContent = '📱 Local Mode';
+                this.statusIndicator.className = 'status-indicator local';
+                this.loadThoughts();
+            }
+
+            async loadThoughts() {
+                if (this.useFirebase) {
+                    // Firebase handles this with real-time listener
+                    return;
+                }
+                
+                // Load from localStorage
+                try {
+                    const stored = localStorage.getItem('thoughts');
+                    this.thoughts = stored ? JSON.parse(stored) : [];
+                    this.renderThoughts();
+                } catch (error) {
+                    console.error('Error loading thoughts from localStorage:', error);
+                    this.thoughts = [];
+                    this.renderThoughts();
+                }
             }
 
             async handleThoughtSubmit(e) {
@@ -412,13 +448,25 @@
 
                 try {
                     const thought = {
+                        id: Date.now().toString(),
                         author: "Anonymous",
                         content: content,
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        timestamp: new Date(),
                         replies: []
                     };
 
-                    await this.db.collection('thoughts').add(thought);
+                    if (this.useFirebase) {
+                        const firebaseThought = {
+                            ...thought,
+                            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+                        };
+                        await this.db.collection('thoughts').add(firebaseThought);
+                    } else {
+                        this.thoughts.unshift(thought);
+                        this.saveThoughtsLocal();
+                        this.renderThoughts();
+                    }
+                    
                     this.thoughtForm.reset();
                 } catch (error) {
                     console.error('Error adding thought:', error);
@@ -432,31 +480,78 @@
             async addReply(thoughtId, author, content, isAdvice = false) {
                 try {
                     const reply = {
+                        id: Date.now().toString(),
                         author: author,
                         content: content,
-                        timestamp: firebase.firestore.FieldValue.serverTimestamp(),
+                        timestamp: new Date(),
                         isAdvice: isAdvice
                     };
 
-                    await this.db.collection('thoughts').doc(thoughtId).update({
-                        replies: firebase.firestore.FieldValue.arrayUnion(reply)
-                    });
+                    if (this.useFirebase) {
+                        const thoughtDoc = await this.db.collection('thoughts').doc(thoughtId).get();
+                        if (thoughtDoc.exists) {
+                            const thoughtData = thoughtDoc.data();
+                            const currentReplies = thoughtData.replies || [];
+                            currentReplies.push(reply);
+                            
+                            await this.db.collection('thoughts').doc(thoughtId).update({
+                                replies: currentReplies
+                            });
+                        }
+                    } else {
+                        const thought = this.thoughts.find(t => t.id === thoughtId);
+                        if (thought) {
+                            thought.replies.push(reply);
+                            this.saveThoughtsLocal();
+                            this.renderThoughts();
+                        }
+                    }
                 } catch (error) {
                     console.error('Error adding reply:', error);
                     this.showError('Failed to add reply. Please try again.');
                 }
             }
 
-            renderThoughts() {
-                if (this.thoughts.length === 0) {
-                    this.thoughtsContainer.innerHTML = `
-                        <div class="empty-state">
-                            <h3>No thoughts shared yet</h3>
-                            <p>Be the first to share something interesting!</p>
-                        </div>
-                    `;
+            async deleteThought(thoughtId) {
+                if (!confirm('Are you sure you want to delete this thought? This cannot be undone.')) {
                     return;
                 }
+                
+                try {
+                    if (this.useFirebase) {
+                        await this.db.collection('thoughts').doc(thoughtId).delete();
+                    } else {
+                        this.thoughts = this.thoughts.filter(t => t.id !== thoughtId);
+                        this.saveThoughtsLocal();
+                        this.renderThoughts();
+                    }
+                } catch (error) {
+                    console.error('Error deleting thought:', error);
+                    this.showError('Failed to delete thought. Please try again.');
+                }
+            }
+
+            saveThoughtsLocal() {
+                try {
+                    localStorage.setItem('thoughts', JSON.stringify(this.thoughts));
+                } catch (error) {
+                    console.error('Error saving to localStorage:', error);
+                }
+            }
+
+            renderThoughts() {
+                if (this.thoughts.length === 0) {
+                    this.emptyState.style.display = 'block';
+                    this.emptyState.innerHTML = `
+                        <h3>No thoughts shared yet</h3>
+                        <p>Be the first to share something interesting!</p>
+                    `;
+                    this.thoughtsContainer.innerHTML = '';
+                    this.thoughtsContainer.appendChild(this.emptyState);
+                    return;
+                }
+
+                this.emptyState.style.display = 'none';
                 
                 this.thoughtsContainer.innerHTML = this.thoughts.map(thought => `
                     <div class="thought-card">
@@ -472,6 +567,9 @@
                             </button>
                             <button class="btn btn-small btn-advice" onclick="thoughtBoard.toggleAdviceForm('${thought.id}')">
                                 📝 Give English Advice
+                            </button>
+                            <button class="btn btn-small btn-delete" onclick="thoughtBoard.deleteThought('${thought.id}')">
+                                🗑️ Delete
                             </button>
                         </div>
 
@@ -560,9 +658,17 @@
             formatTimestamp(timestamp) {
                 if (!timestamp) return 'Just now';
                 
-                // Handle Firestore Timestamp
-                const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp);
-                return date.toLocaleString();
+                try {
+                    if (timestamp.toDate) {
+                        return timestamp.toDate().toLocaleString();
+                    }
+                    if (timestamp instanceof Date) {
+                        return timestamp.toLocaleString();
+                    }
+                    return new Date(timestamp).toLocaleString();
+                } catch (error) {
+                    return 'Just now';
+                }
             }
 
             escapeHtml(text) {
@@ -573,11 +679,10 @@
             }
 
             showError(message) {
-                // Simple error display - you could make this more elegant
                 const errorDiv = document.createElement('div');
                 errorDiv.style.cssText = `
                     position: fixed;
-                    top: 20px;
+                    top: 80px;
                     left: 50%;
                     transform: translateX(-50%);
                     background: #f44336;
@@ -597,6 +702,11 @@
                 }, 5000);
             }
         }
+
+        // Initialize the thought board when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            window.thoughtBoard = new ThoughtBoard();
+        });
     </script>
 </body>
 </html>
